@@ -38,49 +38,46 @@ check_nexus_version() {
     fi
 }
 
-# 安装 Nexus CLI
-install_nexus() {
+# 安装 Nexus CLI 并启动节点
+install_and_start_nexus() {
     check_dependencies
-    echo -e "${YELLOW}注意：即将通过 curl 下载并执行安装脚本，请确保信任来源！${NC}"
-    read -p "是否继续安装？(y/n): " confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        echo "安装已取消。"
-        return 0
-    fi
-
-    echo "开始安装 Nexus CLI..."
-    curl -s https://cli.nexus.xyz/ | sh -s -- -y
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Nexus CLI 安装成功！${NC}"
-        # 动态检测 shell 类型并提供合适的 PATH 更新提示
-        case "$SHELL" in
-            */zsh)
-                echo "请运行以下命令更新 PATH 或重启终端："
-                echo "  source ~/.zshrc"
-                ;;
-            */bash)
-                echo "请运行以下命令更新 PATH 或重启终端："
-                echo "  source ~/.bashrc"
-                ;;
-            *)
-                echo "请手动更新 PATH 或重启终端："
-                echo "  export PATH=\$PATH:/usr/local/bin"
-                ;;
-        esac
+    if check_nexus_installed; then
+        echo -e "${YELLOW}Nexus CLI 已安装，跳过安装步骤。${NC}"
     else
-        echo -e "${RED}安装失败，请检查网络或脚本权限。${NC}" >&2
-        exit 1
-    fi
-}
+        echo -e "${YELLOW}注意：即将通过 curl 下载并执行安装脚本，请确保信任来源！${NC}"
+        read -p "是否继续安装？(y/n): " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            echo "安装已取消。"
+            return 0
+        fi
 
-# 启动节点
-start_node() {
-    if ! check_nexus_installed; then
-        echo -e "${RED}Nexus CLI 未安装，请先选择安装！${NC}"
-        return 1
+        echo "开始安装 Nexus CLI..."
+        curl -s https://cli.nexus.xyz/ | sh -s -- -y
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Nexus CLI 安装成功！${NC}"
+            # 动态检测 shell 类型并提供合适的 PATH 更新提示
+            case "$SHELL" in
+                */zsh)
+                    echo "请运行以下命令更新 PATH 或重启终端："
+                    echo "  source ~/.zshrc"
+                    ;;
+                */bash)
+                    echo "请运行以下命令更新 PATH 或重启终端："
+                    echo "  source ~/.bashrc"
+                    ;;
+                *)
+                    echo "请手动更新 PATH 或重启终端："
+                    echo "  export PATH=\$PATH:/usr/local/bin"
+                    ;;
+            esac
+        else
+            echo -e "${RED}安装失败，请检查网络或脚本权限。${NC}" >&2
+            exit 1
+        fi
     fi
 
+    # 提示用户输入 node-id 并启动节点
     read -p "请输入您的 node-id: " node_id
     if [ -z "$node_id" ]; then
         echo -e "${RED}错误：node-id 不能为空！${NC}"
@@ -149,8 +146,7 @@ main_menu() {
 
         case $choice in
             1)
-                install_nexus
-                start_node
+                install_and_start_nexus
                 read -p "按 Enter 键返回菜单..."
                 ;;
             2)
