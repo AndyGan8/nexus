@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # 一键安装和管理 Nexus CLI 的脚本
 
 # 设置错误处理
@@ -13,9 +12,27 @@ NC='\033[0m' # No Color
 
 # 检查依赖
 check_dependencies() {
+    # 检查 curl
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${RED}错误：未找到 curl，请先安装 curl！${NC}"
         exit 1
+    fi
+
+    # 检查 Docker
+    if ! command -v docker >/dev/null 2>&1; then
+        echo -e "${YELLOW}Docker 未安装，正在安装 Docker...${NC}"
+        sudo apt update
+        sudo apt install -y docker.io
+        sudo systemctl start docker
+        sudo systemctl enable docker
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Docker 安装并启动成功！${NC}"
+        else
+            echo -e "${RED}Docker 安装失败，请检查网络或权限！${NC}" >&2
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}Docker 已安装，版本：$(docker --version)${NC}"
     fi
 }
 
@@ -50,7 +67,6 @@ install_and_start_nexus() {
             echo "安装已取消。"
             return 0
         fi
-
         echo "开始安装 Nexus CLI..."
         curl -s https://cli.nexus.xyz/ | sh -s -- -y
 
@@ -100,7 +116,6 @@ view_logs() {
         echo -e "${RED}Nexus CLI 未安装，请先选择安装！${NC}"
         return 1
     fi
-
     echo "正在查看 Nexus 节点日志..."
     echo -e "${YELLOW}提示：按 Ctrl+C 退出日志查看${NC}"
     nexus-network logs --follow
@@ -112,7 +127,6 @@ remove_node() {
         echo -e "${RED}Nexus CLI 未安装，无需删除！${NC}"
         return 0
     fi
-
     read -p "确定要删除 Nexus CLI 和相关会话数据吗？(y/n): " confirm
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
         echo "操作已取消。"
@@ -143,7 +157,6 @@ main_menu() {
         echo "4. 检查 Nexus CLI 版本"
         echo "5. 退出"
         read -p "请选择操作 (1-5): " choice
-
         case $choice in
             1)
                 install_and_start_nexus
