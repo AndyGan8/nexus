@@ -64,7 +64,7 @@ EOF
 #!/bin/bash
 set -e
 
-PROVER_ID_FILEıdır="/root/.nexus/node-id"
+PROVER_ID_FILE="/root/.nexus/node-id"
 
 if [ -z "\$NODE_ID" ]; then
     echo "错误：未设置 NODE_ID 环境变量"
@@ -176,7 +176,8 @@ function list_nodes() {
                 $((i+1)) \
                 "$node_id" \
                 "$cpu_usage" \
-                "$mem_usage"ajem "$mem_limit" \
+                "$mem_usage" \
+                "$mem_limit" \
                 "$(echo $status | cut -d' ' -f1)" \
                 "$created_time"
         else
@@ -213,6 +214,44 @@ function get_running_nodes() {
 # 获取所有节点ID（包括已停止的）
 function get_all_nodes() {
     docker ps -a --filter "name=${BASE_CONTAINER_NAME}" --format "{{.Names}}" | sed "s/${BASE_CONTAINER_NAME}-//"
+}
+
+# 查看节点日志
+function select_node_to_view() {
+    local all_nodes=($(get_all_nodes))
+    
+    if [ ${#all_nodes[@]} -eq 0 ]; then
+        echo "当前没有节点"
+        read -p "按任意键返回菜单"
+        return
+    fi
+
+    echo "请选择要查看的节点："
+    echo "0. 返回主菜单"
+    for i in "${!all_nodes[@]}"; do
+        local node_id=${all_nodes[$i]}
+        local container_name="${BASE_CONTAINER_NAME}-${node_id}"
+        local status=$(docker ps -a --filter "name=$container_name" --format "{{.Status}}")
+        if [[ -n "$status" && "$status" == Up* ]]; then
+            echo "$((i+1)). 节点 $node_id [运行中]"
+        else
+            echo "$((i+1)). 节点 $node_id [已停止]"
+        fi
+    done
+
+    read -rp "请输入选项(0-${#all_nodes[@]}): " choice
+
+    if [ "$choice" = "0" ]; then
+        return
+    fi
+
+    if [ "$choice" -ge 1 ] && [ "$choice" -le ${#all_nodes[@]} ]; then
+        local selected_node=${all_nodes[$((choice-1))]}
+        view_node_logs "$selected_node"
+    else
+        echo "无效的选项"
+        read -p "按任意键继续"
+    fi
 }
 
 # 查看节点日志
@@ -270,44 +309,6 @@ function batch_start_nodes() {
     read -p "按任意键返回菜单"
 }
 
-# 选择要查看的节点
-function select_node_to_view() {
-    local all_nodes=($(get_all_nodes))
-    
-    if [ ${#all_nodes[@]} -eq 0 ]; then
-        echo "当前没有节点"
-        read -p "按任意键返回菜单"
-        return
-    fi
-
-    echo "请选择要查看的节点："
-    echo "0. 返回主菜单"
-    for i in "${!all_nodes[@]}"; do
-        local node_id=${all_nodes[$i]}
-        local container_name="${BASE_CONTAINER_NAME}-${node_id}"
-        local status=$(docker ps -a --filter "name=$container_name" --format "{{.Status}}")
-        if [[ $status == Up* ]]; then
-            echo "$((i+1)). 节点 $node_id [运行中]"
-        else
-            echo "$((i+1)). 节点 $node_id [已停止]"
-        fi
-    done
-
-    read -rp "请输入选项(0-${#all_nodes[@]}): " choice
-
-    if [ "$choice" = "0" ]; then
-        return
-    fi
-
-    if [ "$choice" -ge 1 ] && [ "$choice" -le ${#all_nodes[@]} ]; then
-        local selected_node=${all_nodes[$((choice-1))]}
-        view_node_logs "$selected_node"
-    else
-        echo "无效的选项"
-        read -p "按任意键继续"
-    fi
-}
-
 # 批量停止并卸载节点
 function batch_uninstall_nodes() {
     local all_nodes=($(get_all_nodes))
@@ -326,7 +327,7 @@ function batch_uninstall_nodes() {
         local node_id=${all_nodes[$i]}
         local container_name="${BASE_CONTAINER_NAME}-${node_id}"
         local status=$(docker ps -a --filter "name=$container_name" --format "{{.Status}}")
-        if [[ $status == Up* ]; then
+        if [[ -n "$status" && "$status" == Up* ]]; then
             printf "%-6d %-20s [运行中]\n" $((i+1)) "$node_id"
         else
             printf "%-6d %-20s [已停止]\n" $((i+1)) "$node_id"
@@ -410,7 +411,7 @@ function pause_update_restart_node() {
         local node_id=${all_nodes[$i]}
         local container_name="${BASE_CONTAINER_NAME}-${node_id}"
         local status=$(docker ps -a --filter "name=$container_name" --format "{{.Status}}")
-        if [[ $status == Up* ]]; then
+        if [[ -n "$status" && "$status" == Up* ]]; then
             echo "$((i+1)). 节点 $node_id [运行中]"
         else
             echo "$((i+1)). 节点 $node_id [已停止]"
@@ -438,7 +439,7 @@ function pause_update_restart_node() {
 
         # 删除旧容器
         echo "删除旧容器 $container_name ..."
-        docker rm -f "$container_name" 2>/dev/null || echo "旧 контейнер已删除或不存在"
+        docker rm -f "$container_name" 2>/dev/null || echo "旧容器已删除或不存在"
 
         # 启动新容器
         echo "正在重启节点 $selected_node ..."
