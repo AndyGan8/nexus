@@ -33,7 +33,7 @@ function check_pm2() {
     fi
 }
 
-# 构建docker镜像函数
+# 构建 Docker 镜像函数
 function build_image() {
     WORKDIR=$(mktemp -d)
     cd "$WORKDIR"
@@ -129,7 +129,7 @@ function run_container() {
     echo "容器 $container_name 已启动！"
 }
 
-# 停止并卸载容器和镜像、删除日志
+# 停止并卸载容器和日志
 function uninstall_node() {
     local node_id=$1
     local container_name="${BASE_CONTAINER_NAME}-${node_id}"
@@ -148,7 +148,7 @@ function uninstall_node() {
     echo "节点 $node_id 已卸载完成。"
 }
 
-# 显示所有运行中的节点
+# 显示所有节点状态
 function list_nodes() {
     echo "当前节点状态："
     echo "------------------------------------------------------------------------------------------------------------------------"
@@ -395,73 +395,6 @@ function uninstall_all_nodes() {
     read -p "按任意键返回菜单"
 }
 
-# 暂停、更新并重启节点
-function pause_update_restart_node() {
-    local all_nodes=($(get_all_nodes))
-    
-    if [ ${#all_nodes[@]} -eq 0 ]; then
-        echo "当前没有节点"
-        read -p "按任意键返回菜单"
-        return
-    fi
-
-    echo "请选择要暂停、更新并重启的节点："
-    echo "0. 返回主菜单"
-    for i in "${!all_nodes[@]}"; do
-        local node_id=${all_nodes[$i]}
-        local container_name="${BASE_CONTAINER_NAME}-${node_id}"
-        local status=$(docker ps -a --filter "name=$container_name" --format "{{.Status}}")
-        if [[ -n "$status" && "$status" == Up* ]]; then
-            echo "$((i+1)). 节点 $node_id [运行中]"
-        else
-            echo "$((i+1)). 节点 $node_id [已停止]"
-        fi
-    done
-
-    read -rp "请输入选项(0-${#all_nodes[@]}): " choice
-
-    if [ "$choice" = "0" ]; then
-        return
-    fi
-
-    if [ "$choice" -ge 1 ] && [ "$choice" -le ${#all_nodes[@]} ]; then
-        local selected_node=${all_nodes[$((choice-1))]}
-        local container_name="${BASE_CONTAINER_NAME}-${selected_node}"
-        local log_file="${LOG_DIR}/nexus-${selected_node}.log"
-
-        # 暂停节点
-        echo "正在暂停节点 $selected_node ..."
-        docker stop "$container_name" 2>/dev/null || echo "节点 $selected_node 已经停止或不存在"
-
-        # 更新镜像
-        echo "正在更新镜像 $IMAGE_NAME ..."
-        build_image
-
-        # 删除旧容器
-        echo "删除旧容器 $container_name ..."
-        docker rm -f "$container_name" 2>/dev/null || echo "旧容器已删除或不存在"
-
-        # 启动新容器
-        echo "正在重启节点 $selected_node ..."
-        docker run -d --name "$container_name" -v "$log_file":/root/nexus.log -e NODE_ID="$selected_node" "$IMAGE_NAME"
-
-        # 检查容器状态
-        sleep 3
-        if docker ps --filter "name=$container_name" --filter "status=running" --format "{{.Names}}" | grep -qw "$container_name"; then
-            echo "节点 $selected_node 已成功更新并重启！"
-            echo "日志文件：$log_file"
-            echo "可以使用 'docker logs $container_name' 查看日志"
-        else
-            echo "节点 $selected_node 重启失败，请检查日志："
-            cat "$log_file"
-        fi
-    else
-        echo "无效的选项"
-    fi
-
-    read -p "按任意键返回菜单"
-}
-
 # 批量节点轮换启动
 function batch_rotate_nodes() {
     check_pm2
@@ -620,11 +553,10 @@ while true; do
     echo "4. 查看指定节点日志"
     echo "5. 批量节点轮换启动"
     echo "6. 删除全部节点"
-    echo "7. 暂停、更新并重启节点"
-    echo "8. 退出"
+    echo "7. 退出"
     echo "==================================="
 
-    read -rp "请输入选项(1-8): " choice
+    read -rp "请输入选项(1-7): " choice
 
     case $choice in
         1)
@@ -657,9 +589,6 @@ while true; do
             uninstall_all_nodes
             ;;
         7)
-            pause_update_restart_node
-            ;;
-        8)
             echo "退出脚本。"
             exit 0
             ;;
