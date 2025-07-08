@@ -362,7 +362,7 @@ function batch_uninstall_nodes() {
     read -p "按任意键返回菜单"
 }
 
-# 删除全部节点
+# 删除全部节点和文件
 function uninstall_all_nodes() {
     local all_nodes=($(get_all_nodes))
     
@@ -372,26 +372,65 @@ function uninstall_all_nodes() {
         return
     fi
 
-    echo "警告：此操作将删除所有节点！"
+    echo "警告：此操作将删除所有节点、日志文件、脚本目录以及 Nexus 相关配置文件！"
     echo "当前共有 ${#all_nodes[@]} 个节点："
     for node_id in "${all_nodes[@]}"; do
         echo "- $node_id"
     done
+    echo "将删除以下内容："
+    echo "- 所有 Docker 容器（名称以 ${BASE_CONTAINER_NAME} 开头）"
+    echo "- 日志目录：${LOG_DIR}"
+    echo "- 脚本目录：/root/nexus_scripts"
+    echo "- Nexus 配置文件目录：/root/.nexus"
     
-    read -rp "确定要删除所有节点吗？(y/N): " confirm
+    read -rp "确定要删除所有节点和相关文件吗？(y/N): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "已取消操作"
         read -p "按任意键返回菜单"
         return
     fi
 
-    echo "开始删除所有节点..."
+    echo "开始删除所有节点和相关文件..."
+    # 删除所有节点容器
     for node_id in "${all_nodes[@]}"; do
         echo "正在卸载节点 $node_id ..."
         uninstall_node "$node_id"
     done
 
-    echo "所有节点已删除完成！"
+    # 删除日志目录
+    if [ -d "$LOG_DIR" ]; then
+        echo "删除日志目录 $LOG_DIR ..."
+        rm -rf "$LOG_DIR"
+    else
+        echo "日志目录不存在：$LOG_DIR"
+    fi
+
+    # 删除脚本目录
+    local script_dir="/root/nexus_scripts"
+    if [ -d "$script_dir" ]; then
+        echo "删除脚本目录 $script_dir ..."
+        rm -rf "$script_dir"
+    else
+        echo "脚本目录不存在：$script_dir"
+    fi
+
+    # 删除 Nexus 配置文件目录
+    local nexus_config_dir="/root/.nexus"
+    if [ -d "$nexus_config_dir" ]; then
+        echo "删除 Nexus 配置文件目录 $nexus_config_dir ..."
+        rm -rf "$nexus_config_dir"
+    else
+        echo "Nexus 配置文件目录不存在：$nexus_config_dir"
+    fi
+
+    # 停止并删除 pm2 进程
+    if command -v pm2 >/dev/null 2>&1; then
+        echo "停止并删除 pm2 进程 nexus-rotate ..."
+        pm2 delete nexus-rotate 2>/dev/null || echo "pm2 进程 nexus-rotate 不存在"
+        pm2 save
+    fi
+
+    echo "所有节点和相关文件已删除完成！"
     read -p "按任意键返回菜单"
 }
 
@@ -552,7 +591,7 @@ while true; do
     echo "3. 批量停止并卸载指定节点"
     echo "4. 查看指定节点日志"
     echo "5. 批量节点轮换启动"
-    echo "6. 删除全部节点"
+    echo "6. 删除全部节点和文件"
     echo "7. 退出"
     echo "==================================="
 
